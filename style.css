@@ -42,12 +42,12 @@ h1 {
 }
 
 h2 {
-    color: #a0a0ff;
+    color: #ffd2a0; /* Match the new orange theme */
     font-size: 2rem;
     font-weight: 300;
     letter-spacing: 4px;
     text-transform: uppercase;
-    text-shadow: 0 0 10px rgba(160, 160, 255, 0.5);
+    text-shadow: 0 0 10px rgba(255, 210, 160, 0.5);
     opacity: 0.8;
 }
 

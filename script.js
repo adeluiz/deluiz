@@ -111,14 +111,26 @@ class Particle {
         this.x = width / 2;
         this.y = height / 2;
         
-        // Colors
-        // Hot blue near center, cooling to purple/red outward
+        // Colors - Orange instead of blue
+        // Hot white/yellow near center, cooling to deep orange/red outward
         const colorRatio = 1 - rDist;
-        const r = Math.floor(100 + 155 * (1-colorRatio));
-        const g = Math.floor(150 * colorRatio);
-        const b = Math.floor(255);
-        this.color = `rgb(${r}, ${g}, ${b})`;
+        const r = Math.floor(255);
+        const g = Math.floor(100 + 155 * colorRatio);
+        const b = Math.floor(200 * colorRatio); // Yellow near center, red outward
+        
+        // Update: Let's adjust b to make it warmer.
+        // Pure orange is roughly (255, 165, 0).
+        // Center: white/yellow -> r:255, g:255, b:200
+        // Edge: dark red/orange -> r:255, g:50, b:0
+        const new_g = Math.floor(50 + 205 * colorRatio);
+        const new_b = Math.floor(200 * colorRatio);
+        
+        this.color = `rgb(${r}, ${new_g}, ${new_b})`;
         this.size = Math.random() * 1.5 + 0.5;
+        
+        // Custom velocity for gravity
+        this.vx = 0;
+        this.vy = 0;
     }
     
     update(hover) {
@@ -137,13 +149,41 @@ class Particle {
         const aliveAlphaY = this.alphaY + Math.cos(Date.now() * 0.002 + this.index) * 2;
         
         // Lerp based on hover state
-        // To make it look cool, we add an easing/spring effect implicitly by lerping the target
-        const targetX = bhTargetX + (aliveAlphaX - bhTargetX) * hover;
-        const targetY = bhTargetY + (aliveAlphaY - bhTargetY) * hover;
+        let targetX = bhTargetX + (aliveAlphaX - bhTargetX) * hover;
+        let targetY = bhTargetY + (aliveAlphaY - bhTargetY) * hover;
         
-        // Smoothly move towards target
-        this.x += (targetX - this.x) * 0.1;
-        this.y += (targetY - this.y) * 0.1;
+        // Mouse gravity attraction (slingshot effect)
+        if (mouse.x !== -1000) {
+            const dx = mouse.x - this.x;
+            const dy = mouse.y - this.y;
+            const distSq = dx * dx + dy * dy;
+            const dist = Math.sqrt(distSq);
+            
+            // Interaction radius for mouse gravity
+            const gravityRadius = 350;
+            if (dist < gravityRadius) {
+                // Gravity force is inversely proportional to distance squared
+                // We add a softening parameter to avoid infinite acceleration at center
+                const force = 3000 / (distSq + 2000); 
+                this.vx += (dx / dist) * force;
+                this.vy += (dy / dist) * force;
+            }
+        }
+        
+        // Spring force pulling particle back to its target position
+        const springX = (targetX - this.x) * 0.08;
+        const springY = (targetY - this.y) * 0.08;
+        
+        this.vx += springX;
+        this.vy += springY;
+        
+        // Damping/friction to prevent infinite bouncing
+        this.vx *= 0.90;
+        this.vy *= 0.90;
+        
+        // Update actual position
+        this.x += this.vx;
+        this.y += this.vy;
     }
     
     draw(ctx, hover) {
