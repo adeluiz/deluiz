@@ -3,18 +3,366 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Something Big is Coming</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Something Big Is Coming</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #05050a;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .content {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+            user-select: none;
+        }
+
+        .content .text-wrapper {
+            background: rgba(0, 0, 0, 0.45);
+            padding: 1.5em 3em;
+            border-radius: 12px;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+
+        .content h1 {
+            font-size: clamp(1.8rem, 5vw, 4.5rem);
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            letter-spacing: 0.08em;
+            font-weight: 700;
+            text-shadow: 0 0 40px rgba(255, 100, 30, 0.15), 0 0 80px rgba(255, 60, 10, 0.05);
+            line-height: 1.4;
+        }
+
+        .content h2 {
+            font-size: clamp(1rem, 2.5vw, 2.2rem);
+            color: rgba(255, 255, 255, 0.55);
+            text-align: center;
+            letter-spacing: 0.06em;
+            margin-top: 0.5em;
+            font-weight: 300;
+        }
+    </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
     <div class="content">
-        <h1>Something big is coming</h1>
-        <h2>Algo grande viene</h2>
+        <div class="text-wrapper">
+            <h1>Something big is coming</h1>
+            <h2>Algo grande viene</h2>
+        </div>
     </div>
-    <script src="script.js"></script>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        let particles = [];
+        const numParticles = 4000;
+        let alphaPoints = [];
+
+        let mouse = { x: -1000, y: -1000 };
+        let hoverState = 0;
+        let targetHoverState = 0;
+
+        const mouseRadius = 300;
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            initAlphaPoints();
+        }
+
+        window.addEventListener('resize', resize);
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) {
+                mouse.x = e.touches[0].clientX;
+                mouse.y = e.touches[0].clientY;
+            }
+        }, { passive: true });
+        window.addEventListener('mouseleave', () => {
+            mouse.x = -1000;
+            mouse.y = -1000;
+        });
+        window.addEventListener('touchend', () => {
+            mouse.x = -1000;
+            mouse.y = -1000;
+        });
+
+        function initAlphaPoints() {
+            const offCanvas = document.createElement('canvas');
+            const offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
+
+            const size = Math.min(width, height) * 0.6;
+            offCanvas.width = width;
+            offCanvas.height = height;
+
+            offCtx.fillStyle = 'white';
+            offCtx.font = `bold ${size}px 'Times New Roman', serif`;
+            offCtx.textAlign = 'center';
+            offCtx.textBaseline = 'middle';
+            offCtx.fillText('α', width / 2, height / 2);
+
+            const imageData = offCtx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+
+            alphaPoints = [];
+            for (let y = 0; y < height; y += 4) {
+                for (let x = 0; x < width; x += 4) {
+                    const index = (y * width + x) * 4;
+                    if (data[index + 3] > 128) {
+                        alphaPoints.push({ x, y });
+                    }
+                }
+            }
+
+            if (particles.length === 0 && alphaPoints.length > 0) {
+                createParticles();
+            } else if (alphaPoints.length > 0) {
+                particles.forEach((p, i) => {
+                    const ap = alphaPoints[i % alphaPoints.length];
+                    p.alphaX = ap.x + (Math.random() - 0.5) * 5;
+                    p.alphaY = ap.y + (Math.random() - 0.5) * 5;
+                });
+            }
+        }
+
+        class Particle {
+            constructor(index) {
+                this.index = index;
+
+                const ap = alphaPoints[index % alphaPoints.length];
+                this.alphaX = ap.x + (Math.random() - 0.5) * 5;
+                this.alphaY = ap.y + (Math.random() - 0.5) * 5;
+
+                // Black hole orbit
+                const minRadius = 50;
+                const maxRadius = Math.max(width, height) * 0.8;
+                const rDist = Math.pow(Math.random(), 2);
+                this.bhRadius = minRadius + rDist * maxRadius;
+
+                this.bhAngle = Math.random() * Math.PI * 2;
+                // Keplerian orbit: inner particles orbit much faster
+                // bhSpeed increases dramatically near center
+                this.bhSpeed = (0.025 + Math.random() * 0.015) * (180 / (this.bhRadius + 5));
+
+                this.tiltX = Math.random() * 20 - 10;
+                this.tiltY = Math.random() * 20 - 10;
+
+                this.x = width / 2;
+                this.y = height / 2;
+
+                // Warm orange colors - pure orange tones
+                // Center: bright white-yellow, Edge: deep orange-red
+                const colorRatio = 1 - rDist;
+                const r = 255;
+                const g = Math.floor(30 + 180 * colorRatio);
+                const b = Math.floor(120 * colorRatio);
+
+                this.color = `rgb(${r}, ${g}, ${b})`;
+                // Store base color components for dynamic lighting
+                this.baseR = r;
+                this.baseG = g;
+                this.baseB = b;
+                this.size = Math.random() * 1.5 + 0.5;
+
+                this.vx = 0;
+                this.vy = 0;
+            }
+
+            update(hover) {
+                this.bhAngle += this.bhSpeed;
+
+                const squeeze = 0.4;
+
+                const bhTargetX = width / 2 + Math.cos(this.bhAngle) * this.bhRadius + this.tiltX;
+                const bhTargetY = height / 2 + Math.sin(this.bhAngle) * this.bhRadius * squeeze + this.tiltY;
+
+                const aliveAlphaX = this.alphaX + Math.sin(Date.now() * 0.002 + this.index) * 2;
+                const aliveAlphaY = this.alphaY + Math.cos(Date.now() * 0.002 + this.index) * 2;
+
+                let targetX = bhTargetX + (aliveAlphaX - bhTargetX) * hover;
+                let targetY = bhTargetY + (aliveAlphaY - bhTargetY) * hover;
+
+                // ─── Gravitational slingshot (like asteroid near Jupiter) ───
+                // Effect weakens near center (black hole dominates)
+                const cursorDistFromCenter = Math.hypot(mouse.x - width / 2, mouse.y - height / 2);
+                const deadZone = Math.min(width, height) * 0.16; // ~1/3 of screen radius
+                // Smooth attenuation: minimum 15% effect even at center, ramps to 100% outside dead zone
+                const centerAttenuation = Math.min(1, 0.15 + (1 - 0.15) * Math.max(0, (cursorDistFromCenter - deadZone * 0.3) / (deadZone * 1.5)));
+
+                if (mouse.x !== -1000 && centerAttenuation > 0.01) {
+                    const dx = mouse.x - this.x;
+                    const dy = mouse.y - this.y;
+                    const distSq = dx * dx + dy * dy;
+                    const dist = Math.sqrt(distSq);
+
+                    const gravityRadius = 350;
+                    if (dist < gravityRadius) {
+                        // Newtonian gravity: F = G*M / r² (reduced strength)
+                        const gConstant = 40000;
+                        const softening = 2000;
+                        const force = gConstant / (distSq + softening) * centerAttenuation;
+
+                        // Radial acceleration toward cursor
+                        const ax = (dx / dist) * force;
+                        const ay = (dy / dist) * force;
+
+                        // ─── Slingshot effect ──────────────────────────
+                        // Tangential component perpendicular to radial direction
+                        // Makes particles swing AROUND the cursor
+                        const speed = Math.hypot(this.vx, this.vy);
+                        const tangentialStrength = 0.1;
+
+                        // Perpendicular direction (rotate 90°)
+                        const tx = -dy / dist;
+                        const ty = dx / dist;
+
+                        // Tangential boost: stronger when closer and faster
+                        const tangentialForce = tangentialStrength * force * (speed * 0.008);
+
+                        this.vx += ax + tx * tangentialForce;
+                        this.vy += ay + ty * tangentialForce;
+
+                        // Visual feedback: particles glow brighter near cursor
+                        this.nearMouse = Math.max(0, 1 - dist / gravityRadius) * centerAttenuation;
+                    } else {
+                        this.nearMouse = 0;
+                    }
+                } else {
+                    this.nearMouse = 0;
+                }
+
+                // Spring force toward target
+                const springX = (targetX - this.x) * 0.08;
+                const springY = (targetY - this.y) * 0.08;
+
+                this.vx += springX;
+                this.vy += springY;
+
+                this.vx *= 0.90;
+                this.vy *= 0.90;
+
+                this.x += this.vx;
+                this.y += this.vy;
+            }
+
+            draw(ctx, hover) {
+                // ─── Center illumination ──────────────────────────────
+                // Particles very close to center get brighter (accretion disk heat)
+                const distFromCenter = Math.hypot(this.x - width / 2, this.y - height / 2);
+                const centerGlow = Math.max(0, 1 - distFromCenter / 120);
+
+                // ─── Slingshot glow ────────────────────────────────────
+                const slingshotBoost = this.nearMouse || 0;
+
+                // Combine both light sources
+                const totalBoost = Math.min(1, slingshotBoost + centerGlow * 0.6);
+
+                // Color: base orange + brightening toward white near center/cursor
+                const r = Math.min(255, this.baseR + totalBoost * 80);
+                const g = Math.min(255, this.baseG + totalBoost * 120);
+                const b = Math.min(255, this.baseB + totalBoost * 150);
+                ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+
+                const currentSize = this.size * (1 + hover * 1.0);
+                ctx.globalAlpha = 0.6 + hover * 0.4 + totalBoost * 0.3;
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, currentSize, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Extra glow ring when near cursor or center
+                if (totalBoost > 0.3) {
+                    ctx.globalAlpha = totalBoost * 0.15;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, currentSize * 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        function createParticles() {
+            particles = [];
+            for (let i = 0; i < numParticles; i++) {
+                particles.push(new Particle(i));
+            }
+        }
+
+        function animate() {
+            // Subtle motion trails (static, consistent fade)
+            ctx.fillStyle = 'rgba(5, 5, 10, 0.35)';
+            ctx.fillRect(0, 0, width, height);
+
+            // Mouse proximity to center triggers alpha morph
+            const dx = mouse.x - width / 2;
+            const dy = mouse.y - height / 2;
+            const distToCenter = Math.hypot(dx, dy);
+
+            targetHoverState = distToCenter < mouseRadius ? 1 : 0;
+            hoverState += (targetHoverState - hoverState) * 0.05;
+
+            // Event horizon (dark center) in black hole mode
+            if (hoverState < 0.9) {
+                const horizonRadius = 45 * (1 - hoverState);
+                const gradient = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, horizonRadius * 2);
+                gradient.addColorStop(0, 'rgba(0,0,0,1)');
+                gradient.addColorStop(0.5, 'rgba(0,0,0,0.8)');
+                gradient.addColorStop(1, 'rgba(0,0,0,0)');
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(width / 2, height / 2, horizonRadius * 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update(hoverState);
+                particles[i].draw(ctx, hoverState);
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        resize();
+        animate();
+    </script>
 </body>
 </html>
